@@ -1,124 +1,45 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <title>Download Files</title>
-    <link rel="stylesheet" href="/styles.css" />
-  </head>
+	<head>
+		<meta charset="UTF-8">
+		<link rel="icon" href="favicon.ico">
+		<title>Download Files</title>
+		<link rel="stylesheet" type="text/css" href="styles.css">
+	</head>
   <body>
-    <h1>Download Files</h1>
-    <form id="download-form">
-      <label for="urls">Enter URLs (one per line):</label>
-      <textarea id="urls" name="urls"></textarea>
-      <input type="submit" value="Download">
-    </form>
-    <div id="progress-bars"></div>
+	<div id="header">
+		<div class="wrapper">
+			<img src="Logo.png" alt="">
+			<a href="./">Download</a> <a href="./about">About</a> <a href="./contact">Contact</a>
+		</div>
+	</div>
+	<main>
+		<section class="about-section">
+			<p>Super light weight and a simple file sharing website that allows users to upload and download files to/from personal server with a clean and user-friendly interface.</p>
+		</section>
+		<section>
+			<h1>Download Files</h1>
+			<form id="download-form">
+			  <label class="form-label" for="urls">Enter URLs (one per line):</label>
+			  <textarea id="urls" name="urls"></textarea>
+			  <div class="button-container">
+				  <input type="submit" value="Download">
+				  <input type="button" value="Torrent" class="torrent-button">
+			  </div>
+			</form>
+			<div id="progress-bars"></div>
+			
+			<ul id="files"></ul>
 
-	<!-- A container div for a progress bar for available disk space -->
-    <div id="spaceProgressBarContainer">
-      <div id="spaceProgressBar"></div>
-    </div>
-
-	<!-- A script to handle WebSocket communication and form submission -->
-    <script>
-	  // Create a WebSocket connection
-      const ws = new WebSocket(`wss://${location.host}`);
-	  // Handle WebSocket messages
-      ws.onmessage = event => {
-        const data = JSON.parse(event.data);
-        //console.log(data);
-        if (data.index !== undefined && data.progress) {
-		  // If there is progress information in the message, update the corresponding progress bar
-          document.getElementById(`progress-bar-${data.index}`).style.width = data.progress + '%';
-        }
-      };
-      
-	// Handle form submission
-    document.getElementById('download-form').addEventListener('submit', function(event) {
-      event.preventDefault();
-	  // Get the entered URLs and split them into an array
-      var urls = document.getElementById('urls').value.split('\n');
-      
-      // Create progress bars immediately after form is submitted
-      const progressBarsContainer = document.getElementById('progress-bars');
-      progressBarsContainer.innerHTML = '';
-      urls.forEach((url, index) => {
-        const progressBarContainer = document.createElement('div');
-        progressBarContainer.className = 'progress-bar-container';
-        const progressBar = document.createElement('div');
-        progressBar.className = 'progress-bar';
-        progressBar.id = `progress-bar-${index}`;
-        progressBarContainer.appendChild(progressBar);
-        progressBarsContainer.appendChild(progressBarContainer);
-      });
-	  
-	  // Send a fetch request to download the files and get their download locations
-      fetch('/download?urls=' + encodeURIComponent(urls.join(',')))
-      .then(response => response.json())
-      .then(downloadLocations => {
-        // Display download locations after files have been downloaded
-        const downloadLocationsContainer = document.createElement('div');
-        downloadLocationsContainer.innerHTML = '<h2>Download Locations:</h2>';
-        downloadLocations.forEach(downloadLocation => {
-          const downloadLocationElement = document.createElement('a');
-          downloadLocation = downloadLocation.replace('/home/dirin/public_html/TAOPHP/files/', '');
-          downloadLocationElement.textContent = downloadLocation;
-          downloadLocationElement.href = 'https://46.224.2.247/TAOPHP/files/' + downloadLocation;
-          downloadLocationElement.download = ''; // Add the download attribute
-          downloadLocationsContainer.appendChild(downloadLocationElement);
-          // Add a line break after each a element
-          const lineBreak = document.createElement('br');
-          downloadLocationsContainer.appendChild(lineBreak);
-        });
-        progressBarsContainer.appendChild(downloadLocationsContainer);
-		
-		// Update available disk space and memory after files have been downloaded
-        fetch('/remaining-space')
-        .then(response => response.json())
-        .then(data => {
-          const freeSpace = data.roundedFreeSpace;
-          const freeSpaceGb = Math.round(freeSpace / 1024);
-          document.getElementById(`freeSpaceLabel`).innerHTML = `Avilable Disk Space: <b>${freeSpace}</b> Mb ~ <b>${freeSpaceGb}</b> Gb`;
-        });
-		
-        fetch('/remaining-mem')
-        .then(response => response.json())
-        .then(data => {
-          const freeMem = data.roundedFreeMem;
-          document.getElementById(`freeMemLabel`).innerHTML = `Avilable Memory: <b>${freeMem}</b> Mb`;
-        });
-
-      });
-    });
-	
-	// Update available disk space and memory after files have been downloaded and progress bars
-    fetch('/remaining-space')
-    .then(response => response.json())
-    .then(data => {
-      const freeSpace = data.roundedFreeSpace;
-      const freeSpaceGb = Math.round(freeSpace / 1024);
-      const freeSpaceLabel = document.createElement('div');
-      freeSpaceLabel.id = `freeSpaceLabel`;
-      freeSpaceLabel.innerHTML = `Avilable Disk Space: <b>${freeSpace}</b> Mb ~ <b>${freeSpaceGb}</b> Gb`;
-      freeSpaceLabel.style.textAlign = 'center';
-      document.body.appendChild(freeSpaceLabel);
-      //updateProgressBar(persent);
-    });
-
-    fetch('/remaining-mem')
-    .then(response => response.json())
-    .then(data => {
-      const freeMem = data.roundedFreeMem;
-      const freeSpaceLabel = document.createElement('div');
-      freeSpaceLabel.id = `freeMemLabel`;
-      freeSpaceLabel.innerHTML = `Avilable Memory: <b>${freeMem}</b> Mb`;
-      freeSpaceLabel.style.textAlign = 'center';
-      document.body.appendChild(freeSpaceLabel);
-    });
-
-    function updateProgressBar(percentage) {
-      const progressBar = document.getElementById('progressBar');
-      progressBar.style.width = percentage + '%';
-    }
-    </script>
+			<!-- Handle the logics and UI elements-->
+			<script src="main.js"></script>
+		<section>
+	</main>
+	<footer>
+		<ul>
+			<a href="./policy">Privacy Policy</a> | <a href="/terms">Terms of Use</a> | <a href="/faq">FAQ</a> | 
+			<a href="./contact">Contact Us</a>
+		</ul>
+	</footer>
   </body>
 </html>
