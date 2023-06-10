@@ -1,8 +1,11 @@
+// Author Omid Ghotbi (TAO)
+
 // Require necessary modules base on Nodejs 11
 // require dotenv library to use environmental variables
 require('dotenv').config();
 const express = require('express');
 const basicAuth = require('express-basic-auth');
+const bodyParser = require('body-parser');
 const WebTorrent = require('webtorrent');
 const request = require('request');
 //const disk = require('diskusage');
@@ -15,6 +18,7 @@ const fs = require('fs');
 
 // Create a new Express app
 const app = express();
+app.use(bodyParser.json());
 
 // Retrieve authentication information from environmental variables
 const UsersLIST = JSON.parse(process.env.userList);
@@ -197,6 +201,35 @@ app.get('/delete-file', (req, res) => {
   });
 });
 
+// Define a route to delete multiple files from a given names
+app.post('/delete-files', (req, res) => {
+  // Get the names from the query parameter
+  const files = req.body.files;
+  if (!files || !Array.isArray(files)) {
+    res.status(400).json({ message: 'Missing or invalid files parameter' });
+    return;
+  }
+
+  const deletedFiles = [];
+  const failedFiles = [];
+  
+  files.forEach((fileName) => {
+	// Get the file path
+    const filePath = path.join(downloadDirectory, fileName);
+	// Delete the file
+    fs.unlink(filePath, (err) => {
+      if (err) {
+        console.error(err);
+        failedFiles.push(fileName);
+      } else {
+        deletedFiles.push(fileName);
+      }
+    });
+  });
+
+  res.json({ deletedFiles, failedFiles });
+});
+
 // Define a route to get all file names in a given path
 app.get("/files", (req, res) => {
   // Get the path from the query parameter
@@ -221,6 +254,30 @@ app.get("/files", (req, res) => {
     // Handle missing path
     res.status(400).send("Missing path parameter");
   }
+});
+
+app.get('/file-size', (req, res) => {
+  // Get the file name from the query parameter
+  const fileName = req.query.file;
+  if (!fileName) {
+    res.status(400).send('Missing file parameter');
+    return;
+  }
+
+  // Get the path from the query parameter
+  const filePath = path.join(downloadDirectory, fileName);
+
+  fs.stat(filePath, (err, stats) => {
+  if (err) {
+	// Handle error
+	console.error(err);
+	res.status(500).send('Error getting file size');
+	return;
+  }
+	
+  const fileSizeInMB = (stats.size / (1024 * 1024)).toFixed(2);
+  // Send file size in MB as JSON data
+  res.send(fileSizeInMB + ' MB');
 });
 
 // Route to get remaining free memory in MB

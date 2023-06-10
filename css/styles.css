@@ -135,6 +135,10 @@ body {
   margin: 0;
 }
 
+li input[type="checkbox"] {
+  float: right;
+}
+
 .nav-menu li {
   border-bottom: 1px solid #CCCCCC;
 }
