@@ -2,19 +2,20 @@
 
 // Require necessary modules base on Nodejs 11
 // require dotenv library to use environmental variables
+
 require('dotenv').config();
 const express = require('express');
 const basicAuth = require('express-basic-auth');
 const bodyParser = require('body-parser');
-const WebTorrent = require('webtorrent');
-const request = require('request');
-//const disk = require('diskusage');
+//const WebTorrent = require('webtorrent');
 const { exec } = require('child_process');
 const WebSocket = require('ws');
 const https = require('https');
+const axios = require('axios');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
+const Promise = require('bluebird');
 
 // Create a new Express app
 const app = express();
@@ -72,57 +73,93 @@ app.get('/main.js', function(req, res) {
   res.sendFile(__dirname + '/public/main.js');
 });
 
-// Download route and function 
-app.get('/download', (req, res) => {
+// Download Handler
+app.get('/download', async (req, res) => {
   const urls = req.query.urls.split(',');
-  const downloads = urls.map((url, index) => {
+  const downloads = urls.map(async (url, index) => {
     let localFilename = path.basename(url);
     localFilename = localFilename.replace(/(\.[^.]+\?)[\d\W]+$/, '$1').replace(/\?$/, ''); // Remove Symbols 
     const downloadLocation = path.join(downloadDirectory, localFilename);
-    let receivedBytes = 0;
-    let totalBytes = 0;
-	let lastUpdatedTime = new Array(urls.length).fill(0);
-	let lastProgress = new Array(urls.length).fill(0);
+
+    let size = 0;
+    let totalBytes;
+
+    // Check if the file exists before getting its size
+    if (fs.existsSync(downloadLocation)) {
+      size = fs.statSync(downloadLocation).size;
+    }
 	
-    return new Promise((resolve, reject) => {
-      request({
-        url,
-        rejectUnauthorized: false
-      })
-        .on('response', response => {
-          totalBytes = parseInt(response.headers['content-length'], 10);
-        })
-        .on('data', chunk => {
-          receivedBytes += chunk.length;
-          const progress = ((receivedBytes / totalBytes) * 100).toFixed(1);;
-          if (progress - lastProgress[index] > 0.1) { // update progress bar if there is a progress
-            //console.log('indedx : ' + index + ' Progress : ' + progress + ' receivedBytes : ' + receivedBytes + ' totalBytes : ' + totalBytes)
-            if (Date.now() - lastUpdatedTime[index] >= 500) { // update progress bar every 500ms
-              // Send a progress update to all connected WebSocket clients
-              wss.clients.forEach(client => {
-              if (client.readyState === WebSocket.OPEN) {
-                client.send(JSON.stringify({ index, progress }));
-              }
-            });
-            lastUpdatedTime[index] = Date.now();
-            lastProgress[index] = progress;
-            }
-          }
-        })
-        .pipe(fs.createWriteStream(downloadLocation))
-        .on('close', () => {
-		  wss.clients.forEach(client => {
-			if (client.readyState === WebSocket.OPEN) {
-			  client.send(JSON.stringify({ index, progress: 100 }));
-			}
-		  });
-          resolve(downloadLocation);
-        }).on('error', error => {
-		  console.log(error);
-          reject(error);
-        });
-    });
+	// Create an empty file if it doesn't exists
+	if (!fs.existsSync(downloadLocation)) {
+      fs.writeFileSync(downloadLocation, '');
+    }
+
+    // Get totalBytes before entering the while loop
+    const responseHead = await axios.head(url);
+    totalBytes = parseInt(responseHead.headers['content-length'], 10) + size;
+
+    while (size < totalBytes) {
+	  let success = false;
+	  while (!success) {
+		try {
+			const writer = fs.createWriteStream(downloadLocation, { flags: 'a' });
+			const response = await axios({
+			  url,
+			  method: 'GET',
+			  responseType: 'stream',
+			  headers: { range: `bytes=${size}-` },
+			  timeout: 86400000, // Set timeout to 1 day for slow connection
+			});
+
+			response.data.on('data', (chunk) => {
+			  //console.error('size : ', size , '  totalBytes : ',  totalBytes);
+			  size += chunk.length;
+			  const progress = ((size / totalBytes) * 100).toFixed(1);
+			  // Send a progress update to all connected WebSocket clients
+			  wss.clients.forEach(client => {
+				if (client.readyState === WebSocket.OPEN) {
+				  client.send(JSON.stringify({ index, progress }));
+				}
+			  });
+			});
+			
+			response.data.on('end', () => {
+			  if (size < totalBytes) {
+				console.error(`Download interrupted at ${size} bytes. Retrying...`);
+				// Wait for a second before retrying
+				setTimeout(() => {}, 1000);
+			  }
+			});
+			
+			response.data.on('error', (error) => {
+			  console.error(`Error occurred while downloading: ${error.message}`);
+			  writer.end(); // End the write stream
+			  // Wait for a second before retrying
+              setTimeout(() => {}, 1000);
+			});
+
+			response.data.on('close', () => {
+			  console.log('Stream closed');
+			});
+
+			response.data.pipe(writer);
+
+			await new Promise((resolve, reject) => {
+			  writer.on('finish', resolve);
+			  writer.on('error', reject);
+			});
+		
+		success = true; // If the download was successful, exit the retry loop
+		} catch (error) {
+			console.error(`Download interrupted. Retrying...`);
+			// Wait for a minute before retrying
+			await new Promise(resolve => setTimeout(resolve, 1000));
+			continue; // Continue the while loop to retry the download
+		}
+	  }
+    }
   });
+
   // Wait for all downloads to complete and send the download locations to the client
   Promise.all(downloads).then(downloadLocations => {
     res.send(downloadLocations);
@@ -278,6 +315,7 @@ app.get('/file-size', (req, res) => {
   const fileSizeInMB = (stats.size / (1024 * 1024)).toFixed(2);
   // Send file size in MB as JSON data
   res.send(fileSizeInMB + ' MB');
+	});
 });
 
 // Route to get remaining free memory in MB
