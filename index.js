@@ -78,7 +78,8 @@ app.get('/download', async (req, res) => {
   const urls = req.query.urls.split(',');
   const downloads = urls.map(async (url, index) => {
     let localFilename = path.basename(url);
-    localFilename = localFilename.replace(/(\.[^.]+\?)[\d\W]+$/, '$1').replace(/\?$/, ''); // Remove Symbols 
+    localFilename = localFilename.replace(/(\.[^.]+\?)[\d\W]+$/, '$1').replace(/\?$/, ''); // Remove Symbols
+	localFilename = localFilename.replace(/\?.*$/, ''); // Remove everything after the first question mark
     const downloadLocation = path.join(downloadDirectory, localFilename);
 
     let size = 0;
